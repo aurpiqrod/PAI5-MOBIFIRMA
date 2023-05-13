@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">My Application</string>
+    <string name="camas">Camas:</string>
+    <string name="mesas">Mesas:</string>
+    <string name="sillas">Sillas:</string>
+    <string name="sillones">Sillones:</string>
+    <string name="hint_cantidad">Cantidad</string>
+    <string name="sabanas">Sábanas</string>
+    <string name="enviar">Enviar</string>
+</resources>
+
