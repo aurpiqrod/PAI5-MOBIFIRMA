@@ -33,6 +33,11 @@ import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManagerFactory;
 
+import java.security.KeyStore;
+import java.security.PrivateKey;
+import java.security.Signature;
+import java.security.cert.Certificate;
+import android.util.Base64;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -168,11 +173,45 @@ public class MainActivity extends AppCompatActivity {
                 String sillonesQuantity = etSillones.getText().toString();
                 jsonObject.put("sillones", sillonesQuantity);
             }
-        } catch (JSONException e) {
+            // Firmar la solicitud y agregar la firma al objeto JSON
+            String signature = signRequest(jsonObject.toString());
+            if (signature != null) {
+                jsonObject.put("signature", signature);
+            } else {
+                throw new Exception("Error al firmar la solicitud");
+            }
+        } catch (Exception e) {
             e.printStackTrace();
         }
 
         return jsonObject;
+    }
+
+    private String signRequest(String requestData) {
+        try {
+            // Cargar el keystore desde la carpeta de recursos
+            KeyStore keystore = KeyStore.getInstance("BKS");
+            InputStream keystoreFile = getResources().openRawResource(R.raw.keystore);
+            keystore.load(keystoreFile, "keystore_password".toCharArray());
+
+            // Obtener la clave privada del keystore
+            String alias = "mykey";
+            KeyStore.PrivateKeyEntry privateKeyEntry = (KeyStore.PrivateKeyEntry) keystore.getEntry(alias,
+                    new KeyStore.PasswordProtection("key_password".toCharArray()));
+            PrivateKey privateKey = privateKeyEntry.getPrivateKey();
+
+            // Crear una instancia del objeto Signature y usar la clave privada para firmar
+            Signature signature = Signature.getInstance("SHA256withRSA");
+            signature.initSign(privateKey);
+            signature.update(requestData.getBytes("UTF-8"));
+
+            // Firmar la solicitud y codificar en Base64
+            byte[] signedData = signature.sign();
+            return Base64.encodeToString(signedData, Base64.NO_WRAP);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
     }
     private void sendDataToServer(String server, int port, String data) {
         new SendDataTask(this).execute(server, String.valueOf(port), data);
