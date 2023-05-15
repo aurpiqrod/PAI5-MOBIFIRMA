@@ -26,6 +26,7 @@ import java.security.KeyManagementException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
 import java.security.cert.CertificateException;
 
 import javax.net.ssl.SSLContext;
@@ -33,7 +34,6 @@ import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManagerFactory;
 
-import java.security.KeyStore;
 import java.security.PrivateKey;
 import java.security.Signature;
 import java.security.cert.Certificate;
@@ -46,6 +46,8 @@ public class MainActivity extends AppCompatActivity {
     protected static int port = 7070;
     CheckBox checkBoxCamas, checkBoxMesas, checkBoxSabanas, checkBoxSillas, checkBoxSillones;
     EditText etCamas, etMesas, etSabanas, etSillas, etSillones;
+
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -108,7 +110,8 @@ public class MainActivity extends AppCompatActivity {
             }
         });
     }
-    // Creación de un cuadro de dialogo para confirmar pedido
+
+    // Creación de un cuadro de diálogo para confirmar pedido
     private void showDialog() throws Resources.NotFoundException {
         if (!checkBoxCamas.isChecked() && !checkBoxMesas.isChecked() && !checkBoxSabanas.isChecked() && !checkBoxSillas.isChecked() && !checkBoxSillones.isChecked()) {
             // Mostramos un mensaje emergente;
@@ -135,13 +138,13 @@ public class MainActivity extends AppCompatActivity {
                             }
 
                     )
-                    .
+                            .
 
-                            setNegativeButton(android.R.string.no, null)
+                    setNegativeButton(android.R.string.no, null)
 
-                    .
+                            .
 
-                            show();
+                    show();
         }
     }
 
@@ -191,15 +194,14 @@ public class MainActivity extends AppCompatActivity {
         try {
             // Cargar el keystore desde la carpeta de recursos
             KeyStore keystore = KeyStore.getInstance("BKS");
-            InputStream keystoreFile = getResources().openRawResource(R.raw.keystore);
-            keystore.load(keystoreFile, "keystore_password".toCharArray());
+            InputStream keystoreFile = getResources().openRawResource(R.raw.client_keystore);
+            keystore.load(keystoreFile, "password".toCharArray());
 
             // Obtener la clave privada del keystore
             String alias = "mykey";
             KeyStore.PrivateKeyEntry privateKeyEntry = (KeyStore.PrivateKeyEntry) keystore.getEntry(alias,
-                    new KeyStore.PasswordProtection("key_password".toCharArray()));
+                    new KeyStore.PasswordProtection("password".toCharArray()));
             PrivateKey privateKey = privateKeyEntry.getPrivateKey();
-
             // Crear una instancia del objeto Signature y usar la clave privada para firmar
             Signature signature = Signature.getInstance("SHA256withRSA");
             signature.initSign(privateKey);
@@ -213,11 +215,12 @@ public class MainActivity extends AppCompatActivity {
         }
         return null;
     }
+
     private void sendDataToServer(String server, int port, String data) {
         new SendDataTask(this).execute(server, String.valueOf(port), data);
     }
 
-    private static class SendDataTask extends AsyncTask<String, Void, Void> {
+    private static class SendDataTask extends AsyncTask<String, Void, String> {
         private final WeakReference<MainActivity> activityReference;
 
         SendDataTask(MainActivity context) {
@@ -225,7 +228,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         @Override
-        protected Void doInBackground(String... params) {
+        protected String doInBackground(String... params) {
             String server = params[0];
             int port = Integer.parseInt(params[1]);
             String data = params[2];
@@ -235,10 +238,11 @@ public class MainActivity extends AppCompatActivity {
                 return null;
             }
 
+            String response = null;
             try {
                 // Cargar el truststore desde la carpeta de recursos
                 KeyStore truststore = KeyStore.getInstance("BKS");
-                InputStream truststoreFile = activity.getResources().openRawResource(R.raw.truststore);
+                InputStream truststoreFile = activity.getResources().openRawResource(R.raw.client_truststore);
                 truststore.load(truststoreFile, "password".toCharArray());
 
                 // Crear un SSLContext y un SSLSocketFactory a partir del truststore cargado
@@ -258,7 +262,7 @@ public class MainActivity extends AppCompatActivity {
 
                 // Leer la respuesta del servidor
                 BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                String response = in.readLine();
+                response = in.readLine();
                 if (response != null) {
                     // Manejar la respuesta del servidor
                     System.out.println("Respuesta del servidor: " + response);
@@ -272,7 +276,15 @@ public class MainActivity extends AppCompatActivity {
                      KeyStoreException | CertificateException e) {
                 e.printStackTrace();
             }
-            return null;
+            return response;
+        }
+        @Override
+        protected void onPostExecute(String response) {
+            MainActivity activity = activityReference.get();
+            if (activity != null && !activity.isFinishing() && response != null) {
+                Toast.makeText(activity, "Respuesta del servidor: " + response, Toast.LENGTH_SHORT).show();
+            }
         }
     }
+
 }
