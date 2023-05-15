@@ -5,6 +5,8 @@ import android.content.DialogInterface;
 import android.content.res.Resources;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.text.InputFilter;
+import android.text.Spanned;
 import android.view.View;
 import android.widget.CheckBox;
 import android.widget.EditText;
@@ -26,6 +28,7 @@ import java.security.KeyManagementException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
 import java.security.cert.CertificateException;
 
 import javax.net.ssl.SSLContext;
@@ -33,20 +36,35 @@ import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManagerFactory;
 
+import java.security.PrivateKey;
+import java.security.Signature;
+import java.security.cert.Certificate;
+import android.util.Base64;
 
 public class MainActivity extends AppCompatActivity {
 
     // Setup Server information
-    protected static String server = "10.0.2.2";
-    protected static int port = 7070;
+    String server;
+    int port;
     CheckBox checkBoxCamas, checkBoxMesas, checkBoxSabanas, checkBoxSillas, checkBoxSillones;
     EditText etCamas, etMesas, etSabanas, etSillas, etSillones;
+    String keystorePassword;
+    String privateKeyAlias;
+    String privateKeyPassword;
+    String truststorePassword;
+
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
+        server = getResources().getString(R.string.server);
+        port = getResources().getInteger(R.integer.port);
+        keystorePassword = getResources().getString(R.string.keystore_password);
+        privateKeyAlias = getResources().getString(R.string.private_key_alias);
+        privateKeyPassword = getResources().getString(R.string.private_key_password);
+        truststorePassword = getResources().getString(R.string.truststore_password);
         // Capturamos el boton de Enviar
         View button = findViewById(R.id.button_send);
 
@@ -102,8 +120,44 @@ public class MainActivity extends AppCompatActivity {
                 etSillones.setEnabled(isChecked);
             }
         });
+        InputFilter valueRangeFilter = new InputFilter() {
+
+
+
+            @Override
+            public CharSequence filter(CharSequence source, int start, int end, Spanned dest, int dstart, int dend) {
+                try {
+                    // Intenta convertir el nuevo texto a un número entero
+                    int input = Integer.parseInt(dest.subSequence(0, dstart).toString() + source.subSequence(start, end) + dest.subSequence(dend, dest.length()).toString());
+                    // Verifica si el número está dentro del rango permitido
+                    if (input >= 0 && input <= 300) {
+                        // El valor está dentro del rango permitido, se acepta
+                        return null;
+                    } else {
+                        // El valor está fuera del rango permitido, lanza una excepción
+                        throw new IllegalArgumentException("El valor debe estar entre 0 y 300");
+                    }
+                } catch (NumberFormatException ignored) {
+                    // Ignorar excepciones y no permitir la entrada si no es un número válido
+                } catch (IllegalArgumentException e) {
+                    // Capturar la excepción y mostrar un mensaje de error
+                    Toast.makeText(MainActivity.this, e.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+
+                // El valor está fuera del rango permitido, se rechaza
+                return "";
+            }
+        };
+
+// Aplica el validador a los EditText correspondientes
+        etCamas.setFilters(new InputFilter[] { valueRangeFilter });
+        etMesas.setFilters(new InputFilter[] { valueRangeFilter });
+        etSabanas.setFilters(new InputFilter[] { valueRangeFilter });
+        etSillas.setFilters(new InputFilter[] { valueRangeFilter });
+        etSillones.setFilters(new InputFilter[] { valueRangeFilter });
     }
-    // Creación de un cuadro de dialogo para confirmar pedido
+
+    // Creación de un cuadro de diálogo para confirmar pedido
     private void showDialog() throws Resources.NotFoundException {
         if (!checkBoxCamas.isChecked() && !checkBoxMesas.isChecked() && !checkBoxSabanas.isChecked() && !checkBoxSillas.isChecked() && !checkBoxSillones.isChecked()) {
             // Mostramos un mensaje emergente;
@@ -130,13 +184,13 @@ public class MainActivity extends AppCompatActivity {
                             }
 
                     )
-                    .
+                            .
 
-                            setNegativeButton(android.R.string.no, null)
+                    setNegativeButton(android.R.string.no, null)
 
-                    .
+                            .
 
-                            show();
+                    show();
         }
     }
 
@@ -168,25 +222,63 @@ public class MainActivity extends AppCompatActivity {
                 String sillonesQuantity = etSillones.getText().toString();
                 jsonObject.put("sillones", sillonesQuantity);
             }
-        } catch (JSONException e) {
+            // Firmar la solicitud y agregar la firma al objeto JSON
+            String signature = signRequest(jsonObject.toString());
+            if (signature != null) {
+                jsonObject.put("signature", signature);
+            } else {
+                throw new Exception("Error al firmar la solicitud");
+            }
+        } catch (Exception e) {
             e.printStackTrace();
         }
 
         return jsonObject;
     }
-    private void sendDataToServer(String server, int port, String data) {
-        new SendDataTask(this).execute(server, String.valueOf(port), data);
+
+    private String signRequest(String requestData) {
+        try {
+
+
+            // Cargar el keystore desde la carpeta de recursos
+            KeyStore keystore = KeyStore.getInstance("BKS");
+            InputStream keystoreFile = getResources().openRawResource(R.raw.client_keystore);
+            keystore.load(keystoreFile, keystorePassword.toCharArray());
+
+            // Obtener la clave privada del keystore
+            String alias = privateKeyAlias;
+            KeyStore.PrivateKeyEntry privateKeyEntry = (KeyStore.PrivateKeyEntry) keystore.getEntry(alias,
+                    new KeyStore.PasswordProtection(privateKeyPassword.toCharArray()));
+            PrivateKey privateKey = privateKeyEntry.getPrivateKey();
+            // Crear una instancia del objeto Signature y usar la clave privada para firmar
+            Signature signature = Signature.getInstance("SHA256withRSA");
+            signature.initSign(privateKey);
+            signature.update(requestData.getBytes("UTF-8"));
+
+            // Firmar la solicitud y codificar en Base64
+            byte[] signedData = signature.sign();
+            return Base64.encodeToString(signedData, Base64.NO_WRAP);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
     }
 
-    private static class SendDataTask extends AsyncTask<String, Void, Void> {
-        private final WeakReference<MainActivity> activityReference;
+    private void sendDataToServer(String server, int port, String data) {
+        new SendDataTask(this, truststorePassword).execute(server, String.valueOf(port), data);
+    }
 
-        SendDataTask(MainActivity context) {
+    private static class SendDataTask extends AsyncTask<String, Void, String> {
+        private final WeakReference<MainActivity> activityReference;
+        private final String truststorePassword;
+
+        SendDataTask(MainActivity context, String truststorePassword) {
             activityReference = new WeakReference<>(context);
+            this.truststorePassword = truststorePassword;
         }
 
-        @Override
-        protected Void doInBackground(String... params) {
+        protected String doInBackground(String... params) {
+
             String server = params[0];
             int port = Integer.parseInt(params[1]);
             String data = params[2];
@@ -196,11 +288,12 @@ public class MainActivity extends AppCompatActivity {
                 return null;
             }
 
+            String response = null;
             try {
                 // Cargar el truststore desde la carpeta de recursos
                 KeyStore truststore = KeyStore.getInstance("BKS");
-                InputStream truststoreFile = activity.getResources().openRawResource(R.raw.truststore);
-                truststore.load(truststoreFile, "password".toCharArray());
+                InputStream truststoreFile = activity.getResources().openRawResource(R.raw.client_truststore);
+                truststore.load(truststoreFile, this.truststorePassword.toCharArray());
 
                 // Crear un SSLContext y un SSLSocketFactory a partir del truststore cargado
                 SSLContext sslContext = SSLContext.getInstance("TLS");
@@ -219,7 +312,7 @@ public class MainActivity extends AppCompatActivity {
 
                 // Leer la respuesta del servidor
                 BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                String response = in.readLine();
+                response = in.readLine();
                 if (response != null) {
                     // Manejar la respuesta del servidor
                     System.out.println("Respuesta del servidor: " + response);
@@ -233,7 +326,15 @@ public class MainActivity extends AppCompatActivity {
                      KeyStoreException | CertificateException e) {
                 e.printStackTrace();
             }
-            return null;
+            return response;
+        }
+        @Override
+        protected void onPostExecute(String response) {
+            MainActivity activity = activityReference.get();
+            if (activity != null && !activity.isFinishing() && response != null) {
+                Toast.makeText(activity, "Respuesta del servidor: " + response, Toast.LENGTH_SHORT).show();
+            }
         }
     }
+
 }
