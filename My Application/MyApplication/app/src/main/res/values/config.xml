@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="keystore_password">password</string>
+    <string name="private_key_alias">mykey</string>
+    <string name="private_key_password">password</string>
+    <string name="truststore_password">password</string>
+    <string name="server">10.0.2.2</string>
+    <integer name="port">7070</integer>
+</resources>

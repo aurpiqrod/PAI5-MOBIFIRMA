@@ -44,10 +44,14 @@ import android.util.Base64;
 public class MainActivity extends AppCompatActivity {
 
     // Setup Server information
-    protected static String server = "10.0.2.2";
-    protected static int port = 7070;
+    String server;
+    int port;
     CheckBox checkBoxCamas, checkBoxMesas, checkBoxSabanas, checkBoxSillas, checkBoxSillones;
     EditText etCamas, etMesas, etSabanas, etSillas, etSillones;
+    String keystorePassword;
+    String privateKeyAlias;
+    String privateKeyPassword;
+    String truststorePassword;
 
 
 
@@ -55,7 +59,12 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
+        server = getResources().getString(R.string.server);
+        port = getResources().getInteger(R.integer.port);
+        keystorePassword = getResources().getString(R.string.keystore_password);
+        privateKeyAlias = getResources().getString(R.string.private_key_alias);
+        privateKeyPassword = getResources().getString(R.string.private_key_password);
+        truststorePassword = getResources().getString(R.string.truststore_password);
         // Capturamos el boton de Enviar
         View button = findViewById(R.id.button_send);
 
@@ -229,15 +238,17 @@ public class MainActivity extends AppCompatActivity {
 
     private String signRequest(String requestData) {
         try {
+
+
             // Cargar el keystore desde la carpeta de recursos
             KeyStore keystore = KeyStore.getInstance("BKS");
             InputStream keystoreFile = getResources().openRawResource(R.raw.client_keystore);
-            keystore.load(keystoreFile, "password".toCharArray());
+            keystore.load(keystoreFile, keystorePassword.toCharArray());
 
             // Obtener la clave privada del keystore
-            String alias = "mykey";
+            String alias = privateKeyAlias;
             KeyStore.PrivateKeyEntry privateKeyEntry = (KeyStore.PrivateKeyEntry) keystore.getEntry(alias,
-                    new KeyStore.PasswordProtection("password".toCharArray()));
+                    new KeyStore.PasswordProtection(privateKeyPassword.toCharArray()));
             PrivateKey privateKey = privateKeyEntry.getPrivateKey();
             // Crear una instancia del objeto Signature y usar la clave privada para firmar
             Signature signature = Signature.getInstance("SHA256withRSA");
@@ -254,18 +265,20 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void sendDataToServer(String server, int port, String data) {
-        new SendDataTask(this).execute(server, String.valueOf(port), data);
+        new SendDataTask(this, truststorePassword).execute(server, String.valueOf(port), data);
     }
 
     private static class SendDataTask extends AsyncTask<String, Void, String> {
         private final WeakReference<MainActivity> activityReference;
+        private final String truststorePassword;
 
-        SendDataTask(MainActivity context) {
+        SendDataTask(MainActivity context, String truststorePassword) {
             activityReference = new WeakReference<>(context);
+            this.truststorePassword = truststorePassword;
         }
 
-        @Override
         protected String doInBackground(String... params) {
+
             String server = params[0];
             int port = Integer.parseInt(params[1]);
             String data = params[2];
@@ -280,7 +293,7 @@ public class MainActivity extends AppCompatActivity {
                 // Cargar el truststore desde la carpeta de recursos
                 KeyStore truststore = KeyStore.getInstance("BKS");
                 InputStream truststoreFile = activity.getResources().openRawResource(R.raw.client_truststore);
-                truststore.load(truststoreFile, "password".toCharArray());
+                truststore.load(truststoreFile, this.truststorePassword.toCharArray());
 
                 // Crear un SSLContext y un SSLSocketFactory a partir del truststore cargado
                 SSLContext sslContext = SSLContext.getInstance("TLS");
