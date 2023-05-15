@@ -5,6 +5,8 @@ import android.content.DialogInterface;
 import android.content.res.Resources;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.text.InputFilter;
+import android.text.Spanned;
 import android.view.View;
 import android.widget.CheckBox;
 import android.widget.EditText;
@@ -109,6 +111,41 @@ public class MainActivity extends AppCompatActivity {
                 etSillones.setEnabled(isChecked);
             }
         });
+        InputFilter valueRangeFilter = new InputFilter() {
+
+
+
+            @Override
+            public CharSequence filter(CharSequence source, int start, int end, Spanned dest, int dstart, int dend) {
+                try {
+                    // Intenta convertir el nuevo texto a un número entero
+                    int input = Integer.parseInt(dest.subSequence(0, dstart).toString() + source.subSequence(start, end) + dest.subSequence(dend, dest.length()).toString());
+                    // Verifica si el número está dentro del rango permitido
+                    if (input >= 0 && input <= 300) {
+                        // El valor está dentro del rango permitido, se acepta
+                        return null;
+                    } else {
+                        // El valor está fuera del rango permitido, lanza una excepción
+                        throw new IllegalArgumentException("El valor debe estar entre 0 y 300");
+                    }
+                } catch (NumberFormatException ignored) {
+                    // Ignorar excepciones y no permitir la entrada si no es un número válido
+                } catch (IllegalArgumentException e) {
+                    // Capturar la excepción y mostrar un mensaje de error
+                    Toast.makeText(MainActivity.this, e.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+
+                // El valor está fuera del rango permitido, se rechaza
+                return "";
+            }
+        };
+
+// Aplica el validador a los EditText correspondientes
+        etCamas.setFilters(new InputFilter[] { valueRangeFilter });
+        etMesas.setFilters(new InputFilter[] { valueRangeFilter });
+        etSabanas.setFilters(new InputFilter[] { valueRangeFilter });
+        etSillas.setFilters(new InputFilter[] { valueRangeFilter });
+        etSillones.setFilters(new InputFilter[] { valueRangeFilter });
     }
 
     // Creación de un cuadro de diálogo para confirmar pedido
